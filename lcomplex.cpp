@@ -185,11 +185,31 @@ static int lua_complex_abs(lua_State*L)
 //
 static int lua_complex_lanesclone( lua_State* L)
 {
-	// no need to set the metatable, the Lane copying mechanism will take care of it
-	struct S_COMPLEX*self = (S_COMPLEX*)lua_touserdata( L, 1);
-	struct S_COMPLEX*to = (S_COMPLEX*)lua_newuserdata( L, sizeof(S_COMPLEX));
-	*to=*self;
-	return 1;
+	switch( lua_gettop( L))
+	{
+		case 0:
+		lua_pushinteger( L, sizeof( struct S_COMPLEX));
+		return 1;
+
+		case 2:
+		{
+			struct S_COMPLEX* self = (S_COMPLEX*)lua_touserdata( L, 1);
+			struct S_COMPLEX* from = (S_COMPLEX*)lua_touserdata( L, 2);
+			*self = *from;
+			return 0;
+		}
+
+		default:
+		(void) luaL_error( L, "Lanes called clonable_lanesclone with unexpected parameters");
+	}
+	return 0;
+}
+
+
+static int lua_complex_gc( lua_State* L)
+{
+	struct S_COMPLEX* self = (struct S_COMPLEX*) lua_touserdata( L, 1);
+	return 0;
 }
 
 //
@@ -205,6 +225,7 @@ static const struct luaL_Reg complex_mt[]=
 	{"__div",lua_complex_div},
 	{"abs",lua_complex_abs},
 	{"__lanesclone",lua_complex_lanesclone},
+	{"__gc",lua_complex_gc},
 	{NULL,NULL},
 };
 
@@ -224,17 +245,20 @@ static const struct luaL_Reg complexlib[]=
 extern "C" int luaopen_COMPLEX(lua_State*L)
 {
 	//
-	// create a metatable to be used with S_COMPLEX objects
-	//
-	luaL_newmetatable(L,LUA_COMPLEX);	// -1=mt'COMPLEX' create a new metatable
-	lua_pushvalue(L,-1);				// -1=mt'COMPLEX' -2=mt'COMPLEX'
-	lua_setfield(L,-2,"__index");		// set index to itself
-	luaL_register(L,NULL,complex_mt);		// register with complex_mt for this metatable
-
-	//
 	// register functions to be exported by the module
 	//
 	luaL_register(L,"COMPLEX",complexlib);	// register the module itself as global
+	//
+	// create a metatable to be used with S_COMPLEX objects
+	//
+	if(luaL_newmetatable(L,LUA_COMPLEX))	// -1=mt'COMPLEX' create a new metatable
+	{
+		luaL_register(L,NULL,complex_mt);		// register with complex_mt for this metatable
+		lua_pushvalue(L,-1);				// -1=mt'COMPLEX' -2=mt'COMPLEX'
+		lua_setfield(L,-2,"__index");		// set index to itself
+	}
+	lua_setfield(L, -2, "__" LUA_COMPLEX "MT");                    // M
+
 	//
 	// return 1 element on the stack
 	//
